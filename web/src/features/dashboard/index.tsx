@@ -115,6 +115,12 @@ const LazyFlowCharts = lazy(() =>
   }))
 )
 
+const LazyTokenUsageDashboard = lazy(() =>
+  import('../mynewapi-tokens').then((m) => ({
+    default: m.TokenUsageDashboard,
+  }))
+)
+
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -193,6 +199,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   },
   users: {
     titleKey: 'User Analytics',
+  },
+  tokens: {
+    titleKey: 'Tokens',
   },
 }
 
@@ -413,6 +422,13 @@ export function Dashboard() {
                   filters={modelFilters}
                   sensitiveVisible={flowSensitiveVisible}
                 />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'tokens' && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyTokenUsageDashboard />
               </Suspense>
             </FadeIn>
           )}

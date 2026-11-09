@@ -20,6 +20,7 @@ import {
   Activity,
   Box,
   ClipboardList,
+  Coins,
   CreditCard,
   FileText,
   FlaskConical,
@@ -82,6 +83,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Dashboard'),
             url: '/dashboard/models',
             icon: LayoutDashboard,
+          },
+          {
+            title: t('Tokens'),
+            url: '/dashboard/tokens',
+            icon: Coins,
           },
           {
             title: t('API Keys'),
