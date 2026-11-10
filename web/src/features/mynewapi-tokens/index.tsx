@@ -144,15 +144,19 @@ export function TokenUsageDashboard() {
   return (
     <div className='space-y-3 sm:space-y-4'>
       <div className='flex flex-wrap items-start justify-between gap-2'>
-        <Tabs
-          value={view}
-          onValueChange={(value) => setView(value as TokenView)}
-        >
-          <TabsList>
-            <TabsTrigger value='models'>{t('Models')}</TabsTrigger>
-            <TabsTrigger value='ip'>{t('IP')}</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {isAdmin ? (
+          <Tabs
+            value={view}
+            onValueChange={(value) => setView(value as TokenView)}
+          >
+            <TabsList>
+              <TabsTrigger value='models'>{t('Models')}</TabsTrigger>
+              <TabsTrigger value='ip'>{t('IP')}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : (
+          <div />
+        )}
         <div className='flex flex-col items-end gap-2'>
           <ModelsFilter
             preferences={DEFAULT_DASHBOARD_CHART_PREFERENCES}

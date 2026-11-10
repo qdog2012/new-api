@@ -79,6 +79,7 @@ export function TokenIpPanel(props: TokenIpPanelProps) {
     enabled: request !== null,
     retry: false,
     staleTime: 0,
+    meta: { errorToast: false },
   })
 
   const rows = useMemo(() => data?.data ?? [], [data])
