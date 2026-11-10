@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 
 import { FadeIn } from '@/components/page-transition'
+import { getEnabledModels } from '@/features/channels/api'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { ModelsFilter } from '@/features/dashboard/components/models/models-filter-dialog'
 import { DEFAULT_DASHBOARD_CHART_PREFERENCES } from '@/features/dashboard/constants'
@@ -34,7 +35,16 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { snapFiltersToNaturalDays } from './lib/day-range'
+import {
+  collectModelNames,
+  filterRowsByModels,
+  loadSelectedModels,
+  mergeModelOptions,
+  saveSelectedModels,
+} from './lib/model-selection'
 import { TokenCharts } from './token-charts'
+import { TokenModelFilter } from './token-model-filter'
 import { TokenStatCards } from './token-stat-cards'
 
 /**
@@ -45,17 +55,24 @@ import { TokenStatCards } from './token-stat-cards'
 export function TokenUsageDashboard() {
   const userRole = useAuthStore((state) => state.auth.user?.role)
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
+  const [selectedModels, setSelectedModels] = useState<string[] | null>(() =>
+    loadSelectedModels()
+  )
   const [filters, setFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters(DEFAULT_DASHBOARD_CHART_PREFERENCES)
+    snapFiltersToNaturalDays(
+      buildDefaultDashboardFilters(DEFAULT_DASHBOARD_CHART_PREFERENCES)
+    )
   )
 
   const handleFilterChange = useCallback((next: DashboardFilters) => {
-    setFilters(next)
+    setFilters(snapFiltersToNaturalDays(next))
   }, [])
 
   const handleResetFilters = useCallback(() => {
     setFilters(
-      buildDefaultDashboardFilters(DEFAULT_DASHBOARD_CHART_PREFERENCES)
+      snapFiltersToNaturalDays(
+        buildDefaultDashboardFilters(DEFAULT_DASHBOARD_CHART_PREFERENCES)
+      )
     )
   }, [])
 
@@ -85,21 +102,56 @@ export function TokenUsageDashboard() {
     staleTime: 60_000,
   })
 
-  const rows = data ?? []
+  // Channel models need ChannelRead permission; ordinary users get a 403, so
+  // failures silently fall back to the models that appear in the data.
+  const { data: channelModels } = useQuery({
+    queryKey: ['mynewapi', 'tokens', 'channel-models'],
+    queryFn: async () => {
+      const res = requireServerSuccess(await getEnabledModels())
+      return res.success ? (res.data ?? []) : []
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+    meta: { errorToast: false },
+  })
+
+  const rows = useMemo(() => data ?? [], [data])
+  const modelOptions = useMemo(
+    () => mergeModelOptions(channelModels, collectModelNames(rows)),
+    [channelModels, rows]
+  )
+  const effectiveSelectedModels = useMemo(
+    () => selectedModels ?? modelOptions,
+    [selectedModels, modelOptions]
+  )
+  const filteredRows = useMemo(
+    () => filterRowsByModels(rows, new Set(effectiveSelectedModels)),
+    [rows, effectiveSelectedModels]
+  )
+
+  const handleModelsChange = useCallback((next: string[]) => {
+    setSelectedModels(next)
+    saveSelectedModels(next)
+  }, [])
 
   return (
     <div className='space-y-3 sm:space-y-4'>
-      <div className='flex justify-end'>
+      <div className='flex flex-col items-end gap-2'>
         <ModelsFilter
           preferences={DEFAULT_DASHBOARD_CHART_PREFERENCES}
           currentFilters={filters}
           onFilterChange={handleFilterChange}
           onReset={handleResetFilters}
         />
+        <TokenModelFilter
+          options={modelOptions}
+          selected={effectiveSelectedModels}
+          onChange={handleModelsChange}
+        />
       </div>
       <FadeIn>
         <TokenStatCards
-          data={rows}
+          data={filteredRows}
           timeRangeMinutes={timeRangeMinutes}
           loading={isLoading}
           error={isError}
@@ -107,7 +159,7 @@ export function TokenUsageDashboard() {
       </FadeIn>
       <FadeIn delay={0.05}>
         <TokenCharts
-          data={rows}
+          data={filteredRows}
           loading={isLoading}
           timeGranularity={filters.time_granularity}
         />

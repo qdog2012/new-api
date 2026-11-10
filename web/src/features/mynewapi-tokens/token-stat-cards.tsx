@@ -66,12 +66,6 @@ export function TokenStatCards(props: TokenStatCardsProps) {
       icon: Layers,
     },
     {
-      key: 'cacheWrite',
-      title: t('Cache Write'),
-      value: stats.totalCacheCreationTokens,
-      icon: Layers,
-    },
-    {
       key: 'count',
       title: t('Total Count'),
       value: stats.totalCount,
@@ -92,7 +86,7 @@ export function TokenStatCards(props: TokenStatCardsProps) {
   ]
 
   return (
-    <div className='divide-border/60 grid grid-cols-2 divide-x overflow-hidden rounded-lg border sm:grid-cols-3 lg:grid-cols-6'>
+    <div className='divide-border/60 grid grid-cols-2 divide-x overflow-hidden rounded-lg border sm:grid-cols-3 lg:grid-cols-5'>
       {items.map((item, index) => {
         const Icon = item.icon
         const formatted = formatTokenValue(item.value, locale)
