@@ -18,8 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { FadeIn } from '@/components/page-transition'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getEnabledModels } from '@/features/channels/api'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { ModelsFilter } from '@/features/dashboard/components/models/models-filter-dialog'
@@ -44,6 +46,7 @@ import {
   saveSelectedModels,
 } from './lib/model-selection'
 import { TokenCharts } from './token-charts'
+import { TokenIpPanel } from './token-ip-panel'
 import { TokenModelFilter } from './token-model-filter'
 import { TokenStatCards } from './token-stat-cards'
 
@@ -52,8 +55,12 @@ import { TokenStatCards } from './token-stat-cards'
  * same /api/data payload but every metric is derived from token counts
  * (token_used + cache tokens), never from quota (money).
  */
+type TokenView = 'models' | 'ip'
+
 export function TokenUsageDashboard() {
+  const { t } = useTranslation()
   const userRole = useAuthStore((state) => state.auth.user?.role)
+  const [view, setView] = useState<TokenView>('models')
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
   const [selectedModels, setSelectedModels] = useState<string[] | null>(() =>
     loadSelectedModels()
@@ -136,35 +143,55 @@ export function TokenUsageDashboard() {
 
   return (
     <div className='space-y-3 sm:space-y-4'>
-      <div className='flex flex-col items-end gap-2'>
-        <ModelsFilter
-          preferences={DEFAULT_DASHBOARD_CHART_PREFERENCES}
-          currentFilters={filters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-          resolveQuickRange={getNaturalDayRange}
-        />
-        <TokenModelFilter
-          options={modelOptions}
-          selected={effectiveSelectedModels}
-          onChange={handleModelsChange}
-        />
+      <div className='flex flex-wrap items-start justify-between gap-2'>
+        <Tabs
+          value={view}
+          onValueChange={(value) => setView(value as TokenView)}
+        >
+          <TabsList>
+            <TabsTrigger value='models'>{t('Models')}</TabsTrigger>
+            <TabsTrigger value='ip'>{t('IP')}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className='flex flex-col items-end gap-2'>
+          <ModelsFilter
+            preferences={DEFAULT_DASHBOARD_CHART_PREFERENCES}
+            currentFilters={filters}
+            onFilterChange={handleFilterChange}
+            onReset={handleResetFilters}
+            resolveQuickRange={getNaturalDayRange}
+          />
+          <TokenModelFilter
+            options={modelOptions}
+            selected={effectiveSelectedModels}
+            onChange={handleModelsChange}
+          />
+        </div>
       </div>
-      <FadeIn>
-        <TokenStatCards
-          data={filteredRows}
-          timeRangeMinutes={timeRangeMinutes}
-          loading={isLoading}
-          error={isError}
+      {view === 'models' ? (
+        <>
+          <FadeIn>
+            <TokenStatCards
+              data={filteredRows}
+              timeRangeMinutes={timeRangeMinutes}
+              loading={isLoading}
+              error={isError}
+            />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <TokenCharts
+              data={filteredRows}
+              loading={isLoading}
+              timeGranularity={filters.time_granularity}
+            />
+          </FadeIn>
+        </>
+      ) : (
+        <TokenIpPanel
+          startTimestamp={filters.start_timestamp}
+          endTimestamp={filters.end_timestamp}
         />
-      </FadeIn>
-      <FadeIn delay={0.05}>
-        <TokenCharts
-          data={filteredRows}
-          loading={isLoading}
-          timeGranularity={filters.time_granularity}
-        />
-      </FadeIn>
+      )}
     </div>
   )
 }
