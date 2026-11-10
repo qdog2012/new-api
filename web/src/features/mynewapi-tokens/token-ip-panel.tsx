@@ -17,25 +17,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { VChart } from '@visactor/react-vchart'
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatCompactNumber, formatNumber } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
+import { useChartTheme } from '@/lib/use-chart-theme'
+import { VCHART_OPTION } from '@/lib/vchart'
 
 import { getIpTokenStats } from './lib/ip-stats-api'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type VChartSpec = Record<string, any>
 
 interface TokenIpPanelProps {
   startTimestamp?: Date
@@ -45,20 +43,25 @@ interface TokenIpPanelProps {
 interface IpStatsRequest {
   start_timestamp: number
   end_timestamp: number
+  limit: number
   nonce: number
 }
+
+const IP_CHART_LIMIT = 20
 
 function toUnixSeconds(date: Date | undefined, fallback: number): number {
   return date instanceof Date ? Math.floor(date.getTime() / 1000) : fallback
 }
 
 /**
- * On-demand token usage grouped by client IP. Nothing is queried until the
- * user presses Query, because aggregating the log table is expensive.
+ * On-demand token usage grouped by client IP, rendered as a ranking chart below
+ * the token charts. Nothing is queried until the user presses Query, because
+ * aggregating the log table is expensive.
  */
 export function TokenIpPanel(props: TokenIpPanelProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const { resolvedTheme, themeReady } = useChartTheme()
   const [request, setRequest] = useState<IpStatsRequest | null>(null)
 
   const handleQuery = useCallback(() => {
@@ -66,6 +69,7 @@ export function TokenIpPanel(props: TokenIpPanelProps) {
     setRequest({
       start_timestamp: toUnixSeconds(props.startTimestamp, now - 24 * 3600),
       end_timestamp: toUnixSeconds(props.endTimestamp, now),
+      limit: IP_CHART_LIMIT,
       nonce: Date.now(),
     })
   }, [props.startTimestamp, props.endTimestamp])
@@ -83,60 +87,81 @@ export function TokenIpPanel(props: TokenIpPanelProps) {
   })
 
   const rows = useMemo(() => data?.data ?? [], [data])
-  const formatValue = (value: number) => {
-    const fullValue = formatNumber(value, locale)
-    return fullValue.length > 9 ? formatCompactNumber(value, locale) : fullValue
-  }
+
+  const spec = useMemo<VChartSpec | null>(() => {
+    if (rows.length === 0) return null
+    const formatValue = (value: number) => formatNumber(value, locale)
+    return {
+      type: 'bar',
+      data: [
+        {
+          id: 'ipRankData',
+          values: rows.map((row) => ({ Ip: row.ip, Tokens: row.total_tokens })),
+        },
+      ],
+      xField: 'Tokens',
+      yField: 'Ip',
+      direction: 'horizontal',
+      legends: { visible: false },
+      axes: [
+        { orient: 'left', type: 'band' },
+        {
+          orient: 'bottom',
+          type: 'linear',
+          label: { formatMethod: (value: number) => formatValue(value) },
+        },
+      ],
+      label: {
+        visible: true,
+        position: 'outside',
+        formatMethod: (value: number) => formatValue(value),
+        style: { fontSize: 11 },
+      },
+      tooltip: {
+        mark: {
+          content: [
+            {
+              key: (datum: Record<string, unknown>) => datum?.Ip,
+              value: (datum: Record<string, unknown>) =>
+                formatValue(Number(datum?.Tokens) || 0),
+            },
+          ],
+        },
+      },
+      background: { fill: 'transparent' },
+      animation: true,
+    }
+  }, [rows, locale])
 
   let content
   if (request === null) {
     content = (
-      <div className='text-muted-foreground py-10 text-center text-sm'>
+      <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
         {t('No data available')}
       </div>
     )
   } else if (isFetching && rows.length === 0) {
-    content = (
-      <div className='space-y-2 py-4'>
-        <Skeleton className='h-8 w-full' />
-        <Skeleton className='h-8 w-full' />
-        <Skeleton className='h-8 w-full' />
-      </div>
-    )
+    content = <Skeleton className='h-full w-full' />
   } else if (isError || rows.length === 0) {
     content = (
-      <div className='text-muted-foreground py-10 text-center text-sm'>
+      <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
         {t('No data available')}
       </div>
     )
-  } else {
+  } else if (themeReady && spec) {
     content = (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t('IP')}</TableHead>
-            <TableHead className='text-right'>{t('Total Tokens')}</TableHead>
-            <TableHead className='text-right'>{t('Requests')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.ip}>
-              <TableCell className='font-mono'>{row.ip}</TableCell>
-              <TableCell
-                className='text-right tabular-nums'
-                title={formatNumber(row.total_tokens, locale)}
-              >
-                {formatValue(row.total_tokens)}
-              </TableCell>
-              <TableCell className='text-right tabular-nums'>
-                {formatValue(row.count)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <VChart
+        key={`ip-${rows.length}-${resolvedTheme}`}
+        spec={{
+          ...spec,
+          theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+          background: 'transparent',
+        }}
+        option={VCHART_OPTION}
+      />
     )
+  } else {
+    content = <Skeleton className='h-full w-full' />
   }
 
   return (
@@ -155,7 +180,7 @@ export function TokenIpPanel(props: TokenIpPanelProps) {
           {t('Query')}
         </Button>
       </div>
-      <div className='p-2 sm:p-3'>{content}</div>
+      <div className='h-[420px] p-1.5 sm:p-2'>{content}</div>
     </div>
   )
 }
