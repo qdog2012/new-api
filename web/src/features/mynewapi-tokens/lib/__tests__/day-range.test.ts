@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest'
 import type { DashboardFilters } from '@/features/dashboard/types'
 import { getRollingDateRange } from '@/lib/time'
 
-import { snapFiltersToNaturalDays } from '../day-range'
+import { getNaturalDayRange, snapFiltersToNaturalDays } from '../day-range'
 
 function makeFilters(start: Date, end: Date): DashboardFilters {
   return { start_timestamp: start, end_timestamp: end, time_granularity: 'day' }
@@ -31,6 +31,34 @@ function asDate(value: Date | undefined): Date {
   if (!(value instanceof Date)) throw new Error('expected a Date')
   return value
 }
+
+describe('getNaturalDayRange', () => {
+  it('covers today only for a 1-day range', () => {
+    const { start, end } = getNaturalDayRange(1, new Date(2026, 10, 10, 15, 30))
+
+    expect([start.getMonth(), start.getDate(), start.getHours()]).toEqual([
+      10, 10, 0,
+    ])
+    expect([
+      end.getMonth(),
+      end.getDate(),
+      end.getHours(),
+      end.getMinutes(),
+      end.getSeconds(),
+    ]).toEqual([10, 10, 23, 59, 59])
+  })
+
+  it('covers N days including today', () => {
+    const { start, end } = getNaturalDayRange(7, new Date(2026, 10, 10, 15, 30))
+
+    expect([start.getMonth(), start.getDate(), start.getHours()]).toEqual([
+      10, 4, 0,
+    ])
+    expect([end.getMonth(), end.getDate(), end.getHours()]).toEqual([
+      10, 10, 23,
+    ])
+  })
+})
 
 describe('snapFiltersToNaturalDays', () => {
   it('turns the default 1-day rolling range into today 00:00:00 - 23:59:59', () => {

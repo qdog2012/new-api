@@ -40,6 +40,20 @@ function isRollingDayRange(start: Date, end: Date, spanMs: number): boolean {
 }
 
 /**
+ * Build a natural-day range covering "days" days including today: the start is
+ * 00:00:00 of the first day and the end is 23:59:59 of today.
+ */
+export function getNaturalDayRange(
+  days: number,
+  fromDate: Date = new Date()
+): { start: Date; end: Date } {
+  const end = getEndOfDay(fromDate)
+  const start = getStartOfDay(fromDate)
+  start.setDate(start.getDate() - Math.max(0, days - 1))
+  return { start, end }
+}
+
+/**
  * Snap a token dashboard filter range to natural day boundaries: the start
  * becomes 00:00:00 and the end becomes 23:59:59.
  *

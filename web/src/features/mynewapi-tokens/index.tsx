@@ -35,7 +35,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { snapFiltersToNaturalDays } from './lib/day-range'
+import { getNaturalDayRange, snapFiltersToNaturalDays } from './lib/day-range'
 import {
   collectModelNames,
   filterRowsByModels,
@@ -142,6 +142,7 @@ export function TokenUsageDashboard() {
           currentFilters={filters}
           onFilterChange={handleFilterChange}
           onReset={handleResetFilters}
+          resolveQuickRange={getNaturalDayRange}
         />
         <TokenModelFilter
           options={modelOptions}
