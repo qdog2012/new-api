@@ -723,6 +723,36 @@ func TestChannelSettingsValidateHTTPTransport(t *testing.T) {
 	err = (&ChannelSettings{HTTPProtocol: "http1", HTTP2ConnectionShards: 2}).ValidateHTTPTransport()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http2_connection_shards")
+
+	require.NoError(t, (&ChannelSettings{HostsMap: "10.0.0.1 api.example.com"}).ValidateHTTPTransport())
+	err = (&ChannelSettings{HostsMap: "api.example.com"}).ValidateHTTPTransport()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hosts map")
+}
+
+func TestParseChannelHostsMap(t *testing.T) {
+	parsed, err := ParseChannelHostsMap("")
+	require.NoError(t, err)
+	assert.Nil(t, parsed)
+
+	parsed, err = ParseChannelHostsMap(`
+# comment line is ignored
+
+10.0.0.1 api.example.com Other.Example.COM.
+api.example.org 10.0.0.2
+2001:db8::1 v6.example.com
+`)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"api.example.com":   "10.0.0.1",
+		"other.example.com": "10.0.0.1",
+		"api.example.org":   "10.0.0.2",
+		"v6.example.com":    "2001:db8::1",
+	}, parsed)
+
+	_, err = ParseChannelHostsMap("10.0.0.1 api.example.com\nmissing-ip-entry")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "line 2")
 }
 
 func TestChannelOtherSettingsValidateToolLossPolicy(t *testing.T) {

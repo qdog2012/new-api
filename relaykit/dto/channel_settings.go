@@ -3,6 +3,7 @@ package dto
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -36,6 +37,11 @@ type ChannelSettings struct {
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
+	// HostsMap overrides DNS lookups for this channel only, in hosts-file
+	// syntax. Each non-empty line maps one IP address to one or more hostnames
+	// ("10.0.0.1 api.example.com"); lines starting with '#' are ignored. Both
+	// field orders are accepted. Ignored when the channel sets a proxy.
+	HostsMap string `json:"hosts_map,omitempty"`
 	// RequestPlugins lists the request plugin instances the channel binds,
 	// by instance id, in run order.
 	RequestPlugins []string `json:"request_plugins,omitempty"`
@@ -72,6 +78,43 @@ const (
 	MaxHTTP2ConnectionShards = 8
 )
 
+// ParseChannelHostsMap parses hosts-file style lines into a hostname to IP map.
+// Each entry is "10.0.0.1 api.example.com" (hosts order) or the reverse order
+// "api.example.com 10.0.0.1". Blank lines and lines starting with '#' are
+// ignored. Hostnames are lower-cased and a trailing dot is dropped.
+func ParseChannelHostsMap(raw string) (map[string]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	hosts := make(map[string]string)
+	for index, line := range strings.Split(raw, "\n") {
+		entry := strings.TrimSpace(line)
+		if entry == "" || strings.HasPrefix(entry, "#") {
+			continue
+		}
+		fields := strings.Fields(entry)
+		var ip net.IP
+		var names []string
+		if len(fields) >= 2 {
+			if parsed := net.ParseIP(fields[0]); parsed != nil {
+				ip, names = parsed, fields[1:]
+			} else if parsed := net.ParseIP(fields[len(fields)-1]); parsed != nil {
+				ip, names = parsed, fields[:len(fields)-1]
+			}
+		}
+		if ip == nil {
+			return nil, fmt.Errorf("invalid hosts map entry on line %d: %q", index+1, entry)
+		}
+		for _, name := range names {
+			host := strings.ToLower(strings.TrimSuffix(name, "."))
+			if host != "" {
+				hosts[host] = ip.String()
+			}
+		}
+	}
+	return hosts, nil
+}
+
 // ValidateHTTPTransport validates save-time HTTP transport channel settings.
 func (s *ChannelSettings) ValidateHTTPTransport() error {
 	if s == nil {
@@ -88,6 +131,9 @@ func (s *ChannelSettings) ValidateHTTPTransport() error {
 	}
 	if protocol == HTTPProtocolHTTP1 && s.HTTP2ConnectionShards > 1 {
 		return fmt.Errorf("http2_connection_shards must be 1 when http_protocol is http1")
+	}
+	if _, err := ParseChannelHostsMap(s.HostsMap); err != nil {
+		return err
 	}
 	return nil
 }

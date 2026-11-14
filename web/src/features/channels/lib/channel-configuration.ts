@@ -92,6 +92,7 @@ const CONFIGURATION_BLOCKS = {
       'http_protocol',
       'http2_connection_shards',
       'tls_insecure_skip_verify',
+      'hosts_map',
       'disable_task_polling_sleep',
     ],
   },
@@ -197,6 +198,7 @@ export function getChannelConfigurationState(
       (values.http_protocol && values.http_protocol !== 'auto') ||
       (values.http2_connection_shards ?? 1) > 1 ||
       values.tls_insecure_skip_verify ||
+      values.hosts_map?.trim() ||
       values.disable_task_polling_sleep
     ),
     upstreamModelDetection:

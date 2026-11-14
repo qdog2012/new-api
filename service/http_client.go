@@ -318,7 +318,7 @@ func configureProxyTransport(transport *http.Transport, proxyURL *url.URL) error
 	}
 }
 
-func newTransportFactory(proxyURL *url.URL, tlsConfig *tls.Config) (func() *http.Transport, error) {
+func newTransportFactory(proxyURL *url.URL, tlsConfig *tls.Config, hosts map[string]string) (func() *http.Transport, error) {
 	// Validate proxy configuration once before creating shard transports.
 	if proxyURL != nil {
 		probe := newRelayHTTPTransport()
@@ -332,6 +332,7 @@ func newTransportFactory(proxyURL *url.URL, tlsConfig *tls.Config) (func() *http
 			_ = configureProxyTransport(transport, proxyURL)
 		} else {
 			transport.Proxy = http.ProxyFromEnvironment
+			applyChannelHostsDialer(transport, hosts)
 		}
 		if tlsConfig != nil {
 			transport.TLSClientConfig = tlsConfig.Clone()
@@ -344,7 +345,10 @@ func newHTTPClientFromPolicy(policy HTTPTransportPolicy, proxyURL *url.URL, tlsC
 	if policy.TLSInsecureSkipVerify {
 		tlsConfig = common.InsecureTLSConfig
 	}
-	factory, err := newTransportFactory(proxyURL, tlsConfig)
+	// NormalizeHTTPTransportPolicy already dropped unparsable mappings, so the
+	// error here is only possible for a hand-built policy.
+	hosts, _ := dto.ParseChannelHostsMap(policy.HostsKey)
+	factory, err := newTransportFactory(proxyURL, tlsConfig, hosts)
 	if err != nil {
 		return nil, err
 	}

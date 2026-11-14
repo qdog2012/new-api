@@ -340,6 +340,7 @@ const SENSITIVE_FORM_FIELDS = [
   'http_protocol',
   'http2_connection_shards',
   'tls_insecure_skip_verify',
+  'hosts_map',
   'pass_through_body_enabled',
   'responses_websocket_enabled',
   'system_prompt',
@@ -2334,6 +2335,34 @@ export function ChannelMutateDrawer({
               onCheckedChange={field.onChange}
             />
           </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
+  const hostsMapFields = (
+    <FormField
+      control={form.control}
+      name='hosts_map'
+      render={({ field }) => (
+        <FormItem className='px-4 py-3'>
+          <FormLabel>{t('Hosts Override')}</FormLabel>
+          <FormControl>
+            <Textarea
+              {...field}
+              value={field.value ?? ''}
+              rows={4}
+              placeholder='10.0.0.1 api.example.com'
+              disabled={sensitiveLocked}
+              className='font-mono text-xs'
+            />
+          </FormControl>
+          <FormDescription>
+            {t(
+              'Resolve these hostnames to fixed IPs for this channel only. One entry per line, hosts-file format: 10.0.0.1 api.example.com. Lines starting with # are ignored. Ignored when a proxy is configured.'
+            )}
+          </FormDescription>
+          <FormMessage />
         </FormItem>
       )}
     />
@@ -5070,6 +5099,7 @@ export function ChannelMutateDrawer({
                 {httpProtocolFields}
                 {httpShardsFields}
                 {tlsInsecureSkipVerifyFields}
+                {hostsMapFields}
               </fieldset>
             </div>
             {upstreamModelDetectionFields}

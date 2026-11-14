@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -17,6 +19,10 @@ type HTTPTransportPolicy struct {
 	Protocol              string // dto.HTTPProtocolAuto or dto.HTTPProtocolHTTP1
 	Shards                int    // 1..dto.MaxHTTP2ConnectionShards
 	TLSInsecureSkipVerify bool
+	// HostsKey is the validated hosts-file text for this channel. It stays a
+	// string so the policy remains comparable, and it is hashed into the client
+	// cache key so changing the mapping yields a fresh transport.
+	HostsKey string
 }
 
 var httpTransportPolicyWarnings sync.Map
@@ -71,6 +77,21 @@ func NormalizeHTTPTransportPolicy(settings dto.ChannelSettings) HTTPTransportPol
 	if policy.Shards < 1 {
 		policy.Shards = 1
 	}
+
+	if hostsKey := strings.TrimSpace(settings.HostsMap); hostsKey != "" {
+		if _, err := dto.ParseChannelHostsMap(hostsKey); err != nil {
+			// Stored values that do not parse fall back to system DNS instead of
+			// breaking every request on the channel.
+			warnHTTPTransportPolicyOnce("hosts_map", "unparsable")
+		} else {
+			policy.HostsKey = hostsKey
+			if strings.TrimSpace(settings.Proxy) != "" {
+				// A proxy resolves the upstream name itself, so the mapping has no
+				// effect on the dial target.
+				warnHTTPTransportPolicyOnce("hosts_map", "ignored-under-proxy")
+			}
+		}
+	}
 	return policy
 }
 
@@ -86,7 +107,13 @@ func warnHTTPTransportPolicyOnce(field, value string) {
 }
 
 func (p HTTPTransportPolicy) cacheKeyPart() string {
-	return fmt.Sprintf("%s|%d|%t", p.Protocol, p.Shards, p.TLSInsecureSkipVerify)
+	hostsPart := ""
+	if p.HostsKey != "" {
+		// Hash so the cache key (and debug log lines) stay short and single-line.
+		sum := sha256.Sum256([]byte(p.HostsKey))
+		hostsPart = hex.EncodeToString(sum[:8])
+	}
+	return fmt.Sprintf("%s|%d|%t|%s", p.Protocol, p.Shards, p.TLSInsecureSkipVerify, hostsPart)
 }
 
 func (p HTTPTransportPolicy) String() string {
